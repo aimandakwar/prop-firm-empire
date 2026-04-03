@@ -826,11 +826,63 @@ export default function App() {
   const [projPassRate, setProjPassRate] = useState(80)
   const [projReinvest, setProjReinvest] = useState(50)
 
+  // Vision & Journal state
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth())
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [dailyTasks, setDailyTasks] = useState<{id:string;text:string;done:boolean;priority:string}[]>([])
+  const [tasksGenerated, setTasksGenerated] = useState(false)
+
+  const GOAL = 2000000
+  const QUOTES = [
+    "המסחר המושלם הוא ביצוע המערכת בצורה מושלמת — לא הכנסת כסף בהוראה ראשונה.",
+    "Consistency beats genius every single day. Every day you log — you compound.",
+    "כל חשבון funded שנוסף הוא עוד לבנה. $2M = 730 ימי מסחר עקביים.",
+    "Risk management is not fear — it is precision engineering at scale.",
+    "קטן+עקבי>גדול+אחד-פעם. השיטה היא ה-edge. הדיסציפלינה היא ה-moat.",
+    "The market will always be there tomorrow. Your funded account might not — protect it.",
+    "כל payout שמתקבל הוא דלק לשלב הבא. Reinvest. Compound. Empire.",
+  ]
+  const weekQuote = QUOTES[Math.floor(Date.now() / (7 * 86400000)) % QUOTES.length]
+
   // Clock
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
+
+  // Daily task auto-generation
+  useEffect(() => {
+    if (tasksGenerated) return
+    const tasks: {id:string;text:string;done:boolean;priority:string}[] = []
+    const active = accounts.filter(a => a.status !== 'archived')
+    const todayLogged = dailyLogs.some(l => l.log_date === TODAY)
+    if (!todayLogged && active.length > 0)
+      tasks.push({ id:'log-today', text:`רשום P&L של היום — ${active.length} חשבון${active.length > 1 ? 'ות' : ''}`, done:false, priority:'critical' })
+    active.forEach(acc => {
+      const live = liveData.find(l => l.funded_account_id === acc.id)
+      if (live) {
+        const maxDD = acc.prop_firms?.max_drawdown ?? 10
+        const ddPct = ((acc.account_size - live.equity) / acc.account_size * 100)
+        if (ddPct > maxDD * 0.7)
+          tasks.push({ id:`dd-${acc.id}`, text:`⚠️ DD Warning: ${acc.prop_firms?.name} ${ddPct.toFixed(1)}% — הקטן גדלת עמדה!`, done:false, priority:'critical' })
+      }
+      const daysSince = Math.floor((Date.now() - new Date(acc.start_date).getTime()) / 86400000)
+      if (daysSince >= 30 && (acc.total_payouts_received ?? 0) === 0)
+        tasks.push({ id:`payout-${acc.id}`, text:`💸 ${acc.prop_firms?.name} — זכאי ל-payout ראשון (${daysSince} ימים)`, done:false, priority:'high' })
+    })
+    challenges.filter(c => c.status === 'active').forEach(ch => {
+      const target = ch.phase === 2 ? (ch.phase2_target ?? 4000) : ch.phase1_target
+      const pct = target > 0 ? (ch.current_profit / target * 100) : 0
+      if (pct >= 80)
+        tasks.push({ id:`ch-${ch.id}`, text:`🎯 Challenge ${ch.prop_firms?.name} Phase ${ch.phase} — ${pct.toFixed(0)}% — דחף לסיום!`, done:false, priority:'high' })
+    })
+    tasks.push({ id:'vision', text:'👑 פתח עמוד חזון — קרא את ה-Why שלך', done:false, priority:'daily' })
+    if (new Date().getDay() === 0)
+      tasks.push({ id:'weekly', text:'📊 Weekly Review — נתח את ביצועי השבוע', done:false, priority:'high' })
+    setDailyTasks(tasks)
+    setTasksGenerated(true)
+  }, [accounts, challenges, dailyLogs, liveData, tasksGenerated])
 
   // Toast auto-dismiss
   useEffect(() => {
@@ -1183,7 +1235,7 @@ export default function App() {
     return <span style={S.badge(c, bg)}>{status?.toUpperCase()}</span>
   }
 
-  const TABS = ['📊 DASHBOARD', '💼 FUNDED ACCOUNTS', '🏆 CHALLENGES', '📈 GROWTH PROJECTOR', '🏢 PROP FIRMS DB', '💸 REINVESTMENT PLAN']
+  const TABS = ['👑 VISION', '📅 JOURNAL', '📊 DASHBOARD', '💼 FUNDED ACCOUNTS', '🏆 CHALLENGES', '📈 GROWTH PROJECTOR', '🏢 PROP FIRMS DB', '💸 REINVESTMENT PLAN']
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0f', fontFamily: "'JetBrains Mono', 'Courier New', monospace", color: '#e2e8f0' }}>
@@ -1308,9 +1360,343 @@ export default function App() {
       <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px 20px' }}>
 
         {/* ══════════════════════════════════════════════════════
+            TAB 0 — VISION BOARD
+        ══════════════════════════════════════════════════════ */}
+        {tab === 0 && (() => {
+          const totalPayoutsEver = accounts.reduce((s, a) => s + (a.total_payouts_received ?? 0), 0)
+          const progressPct = Math.min((totalCapital / GOAL) * 100, 100)
+          const bestDay = dailyLogs.length > 0 ? Math.max(...dailyLogs.map(l => l.pnl)) : 0
+          const firstDate = accounts.length > 0
+            ? new Date(Math.min(...accounts.map(a => new Date(a.start_date).getTime())))
+            : new Date()
+          const daysActive = Math.floor((Date.now() - firstDate.getTime()) / 86400000)
+          const avgMonthly = dailyLogs.length > 0
+            ? (dailyLogs.reduce((s, l) => s + l.pnl, 0) / Math.max(1, daysActive / 30))
+            : 0
+          const monthsToGoalEst = avgMonthly > 0
+            ? Math.ceil((GOAL - totalCapital) / avgMonthly)
+            : 0
+          const milestones = [
+            { goal: 250000, icon: '⭐', label: '$250K' },
+            { goal: 500000, icon: '🏆', label: '$500K' },
+            { goal: 1000000, icon: '🚀', label: '$1M' },
+            { goal: 2000000, icon: '👑', label: '$2M' },
+          ]
+          const nextMilestone = milestones.find(m => m.goal > totalCapital) ?? milestones[milestones.length - 1]
+          const doneScore = dailyTasks.length > 0 ? Math.round((dailyTasks.filter(t => t.done).length / dailyTasks.length) * 100) : 0
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+              {/* Weekly Quote */}
+              <div style={{ textAlign: 'center', padding: '28px 24px', background: 'linear-gradient(135deg, rgba(0,20,40,0.95), rgba(0,30,60,0.9))', border: '1px solid rgba(0,212,255,0.25)', borderRadius: '12px', boxShadow: '0 0 60px rgba(0,212,255,0.08)' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', letterSpacing: '3px', marginBottom: '14px' }}>QUOTE OF THE WEEK</div>
+                <div style={{ fontSize: '17px', fontStyle: 'italic', color: '#00d4ff', lineHeight: 1.7, maxWidth: '700px', margin: '0 auto', fontFamily: 'var(--font-sans, Arial)' }}>"{weekQuote}"</div>
+              </div>
+
+              {/* Main Progress */}
+              <div style={{ ...S.card, padding: '28px', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(0,212,255,0.3)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', color: '#64748b', letterSpacing: '2px', marginBottom: '6px' }}>MISSION: FUNDED CAPITAL</div>
+                    <div style={{ fontSize: '40px', fontWeight: 700, color: progressPct >= 100 ? '#00ff88' : '#00d4ff', fontFamily: 'monospace' }}>
+                      ${totalCapital.toLocaleString()}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#64748b', marginTop: '4px' }}>TARGET: $2,000,000</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '11px', color: '#64748b', letterSpacing: '2px', marginBottom: '6px' }}>COMPLETION</div>
+                    <div style={{ fontSize: '40px', fontWeight: 700, color: '#a78bfa', fontFamily: 'monospace' }}>
+                      {progressPct.toFixed(2)}%
+                    </div>
+                    {monthsToGoalEst > 0 && (
+                      <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>~{monthsToGoalEst} months at current pace</div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ ...S.bar, height: '18px', borderRadius: '9px', marginBottom: '10px' }}>
+                  <div style={{ ...S.fill(progressPct, progressPct >= 100 ? '#00ff88' : progressPct >= 50 ? '#00d4ff' : '#a78bfa'), height: '18px', borderRadius: '9px', position: 'relative' as const }}>
+                    {progressPct > 8 && (
+                      <span style={{ position: 'absolute', right: '8px', top: '1px', fontSize: '10px', fontWeight: 700, color: '#000' }}>{progressPct.toFixed(1)}%</span>
+                    )}
+                  </div>
+                </div>
+                {/* Milestone markers */}
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '12px' }}>
+                  {milestones.map(m => {
+                    const reached = totalCapital >= m.goal
+                    const isNext = m.goal === nextMilestone.goal
+                    return (
+                      <div key={m.goal} style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, background: reached ? 'rgba(0,255,136,0.12)' : isNext ? 'rgba(0,212,255,0.08)' : 'transparent', border: reached ? '1px solid rgba(0,255,136,0.4)' : isNext ? '1px solid rgba(0,212,255,0.3)' : '1px solid rgba(100,116,139,0.2)', color: reached ? '#00ff88' : isNext ? '#00d4ff' : '#64748b' }}>
+                        {m.icon} {m.label} {reached ? '✓' : isNext ? '← NEXT' : ''}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* KPI Row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+                {[
+                  { icon: '📅', label: 'DAYS ACTIVE', value: daysActive.toString(), sub: `Since ${firstDate.toLocaleDateString('en-GB')}`, color: '#00d4ff' },
+                  { icon: '🏦', label: 'FUNDED ACCOUNTS', value: activeAccounts.length.toString(), sub: `${accounts.length} total`, color: '#00ff88' },
+                  { icon: '📈', label: 'BEST TRADING DAY', value: bestDay > 0 ? '+$' + Math.round(bestDay).toLocaleString() : '—', sub: 'Single day P&L record', color: '#a78bfa' },
+                  { icon: '💸', label: 'TOTAL PAYOUTS', value: '$' + totalPayoutsEver.toLocaleString(), sub: 'All time received', color: '#f59e0b' },
+                  { icon: '🎯', label: 'DAILY SCORE', value: doneScore + '%', sub: `${dailyTasks.filter(t=>t.done).length}/${dailyTasks.length} tasks`, color: doneScore >= 80 ? '#00ff88' : doneScore >= 50 ? '#f59e0b' : '#ff3366' },
+                  { icon: '🔥', label: 'MONTHLY AVG P&L', value: avgMonthly > 0 ? '$' + Math.round(avgMonthly).toLocaleString() : '—', sub: 'Based on logged days', color: '#06b6d4' },
+                ].map((m, i) => (
+                  <div key={i} style={{ ...S.card, padding: '16px' }}>
+                    <div style={{ fontSize: '20px', marginBottom: '6px' }}>{m.icon}</div>
+                    <div style={{ ...S.lbl, marginBottom: '4px' }}>{m.label}</div>
+                    <div style={{ fontSize: '22px', fontWeight: 700, color: m.color, fontFamily: 'monospace' }}>{m.value}</div>
+                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>{m.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Daily Task Engine */}
+              <div style={S.card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div style={S.lbl}>⚡ DAILY MISSION CONTROL — {new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>Daily Score:</div>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: doneScore >= 80 ? '#00ff88' : doneScore >= 50 ? '#f59e0b' : '#ff3366', fontFamily: 'monospace' }}>{doneScore}/100</div>
+                    <button style={{ ...S.btn('secondary'), padding: '4px 10px', fontSize: '10px' }} onClick={() => setTasksGenerated(false)}>🔄 Refresh</button>
+                  </div>
+                </div>
+                {dailyTasks.length === 0 ? (
+                  <div style={{ color: '#64748b', fontSize: '12px', textAlign: 'center', padding: '20px' }}>✅ אין משימות קריטיות להיום — עבודה מצוינת!</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {dailyTasks.map(task => (
+                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '6px', background: task.done ? 'rgba(0,255,136,0.04)' : task.priority === 'critical' ? 'rgba(255,51,102,0.06)' : task.priority === 'high' ? 'rgba(245,158,11,0.06)' : 'rgba(0,212,255,0.04)', border: task.done ? '1px solid rgba(0,255,136,0.2)' : task.priority === 'critical' ? '1px solid rgba(255,51,102,0.25)' : task.priority === 'high' ? '1px solid rgba(245,158,11,0.2)' : '1px solid rgba(0,212,255,0.1)', opacity: task.done ? 0.6 : 1 }}>
+                        <input type="checkbox" checked={task.done} onChange={() => setDailyTasks(p => p.map(t => t.id === task.id ? { ...t, done: !t.done } : t))} style={{ width: '16px', height: '16px', accentColor: '#00ff88', cursor: 'pointer', flexShrink: 0 }} />
+                        <div style={{ flex: 1, fontSize: '12px', color: task.done ? '#64748b' : '#e2e8f0', textDecoration: task.done ? 'line-through' : 'none' }}>{task.text}</div>
+                        <span style={{ ...S.badge(task.priority === 'critical' ? '#ff3366' : task.priority === 'high' ? '#f59e0b' : task.priority === 'daily' ? '#00d4ff' : '#64748b', 'rgba(0,0,0,0.2)'), fontSize: '9px' }}>
+                          {task.priority === 'critical' ? '🔴 CRITICAL' : task.priority === 'high' ? '🟠 HIGH' : '🔵 DAILY'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Smart Alerts */}
+              {(() => {
+                const alerts: {text: string; color: string; bg: string}[] = []
+                activeAccounts.forEach(acc => {
+                  const live = liveData.find(l => l.funded_account_id === acc.id)
+                  if (live) {
+                    const maxDD = acc.prop_firms?.max_drawdown ?? 10
+                    const ddPct = ((acc.account_size - live.equity) / acc.account_size * 100)
+                    if (ddPct > maxDD * 0.8) alerts.push({ text: `🚨 CRITICAL DD: ${acc.prop_firms?.name} — ${ddPct.toFixed(1)}% drawdown! Max allowed: ${maxDD}%`, color: '#ff3366', bg: 'rgba(255,51,102,0.08)' })
+                    else if (ddPct > maxDD * 0.6) alerts.push({ text: `⚠️ DD Warning: ${acc.prop_firms?.name} — ${ddPct.toFixed(1)}% drawdown approaching limit`, color: '#f59e0b', bg: 'rgba(245,158,11,0.06)' })
+                  }
+                  const monthlyTarget = settings.monthly_target
+                  if (monthlyTarget > 0 && acc.current_month_profit >= monthlyTarget * 0.9)
+                    alerts.push({ text: `🎯 ${acc.prop_firms?.name} at ${((acc.current_month_profit/monthlyTarget)*100).toFixed(0)}% of monthly target — request payout soon!`, color: '#00ff88', bg: 'rgba(0,255,136,0.06)' })
+                })
+                challenges.filter(c => c.status === 'active').forEach(ch => {
+                  const target = ch.phase === 2 ? (ch.phase2_target ?? 4000) : ch.phase1_target
+                  const pct = target > 0 ? (ch.current_profit / target * 100) : 0
+                  if (pct >= 90) alerts.push({ text: `🏆 Challenge ALMOST DONE: ${ch.prop_firms?.name} Phase ${ch.phase} — ${pct.toFixed(0)}%! Push across the finish line!`, color: '#00d4ff', bg: 'rgba(0,212,255,0.06)' })
+                })
+                if (alerts.length === 0) return null
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {alerts.map((a, i) => (
+                      <div key={i} style={{ padding: '12px 18px', borderRadius: '8px', background: a.bg, border: `1px solid ${a.color}44`, color: a.color, fontSize: '12px', fontWeight: 700 }}>{a.text}</div>
+                    ))}
+                  </div>
+                )
+              })()}
+
+            </div>
+          )
+        })()}
+
+        {/* ══════════════════════════════════════════════════════
+            TAB 1 — JOURNAL / CALENDAR
+        ══════════════════════════════════════════════════════ */}
+        {tab === 1 && (() => {
+          const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate()
+          const firstDay = new Date(calendarYear, calendarMonth, 1).getDay()
+          const monthName = new Date(calendarYear, calendarMonth, 1).toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })
+          const logsByDate: Record<string, DailyLog[]> = {}
+          dailyLogs.forEach(l => {
+            if (!logsByDate[l.log_date]) logsByDate[l.log_date] = []
+            logsByDate[l.log_date].push(l)
+          })
+          const dayPnl = (d: number) => {
+            const key = `${calendarYear}-${String(calendarMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+            return logsByDate[key]?.reduce((s, l) => s + l.pnl, 0) ?? null
+          }
+          const calDays = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+          const monthLogs = dailyLogs.filter(l => {
+            const d = new Date(l.log_date)
+            return d.getFullYear() === calendarYear && d.getMonth() === calendarMonth
+          })
+          const wins = monthLogs.filter(l => l.pnl > 0).length
+          const losses = monthLogs.filter(l => l.pnl < 0).length
+          const monthTotal = monthLogs.reduce((s, l) => s + l.pnl, 0)
+          const winRate = (wins + losses) > 0 ? (wins / (wins + losses) * 100).toFixed(0) : '0'
+          // Streak
+          let streak = 0
+          const sorted = [...dailyLogs].sort((a, b) => b.log_date.localeCompare(a.log_date))
+          for (const l of sorted) { if (l.pnl > 0) streak++; else break }
+          const selectedLogs = selectedDay ? (logsByDate[selectedDay] ?? []) : []
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Month Stats */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+                {[
+                  { label: 'MONTHLY P&L', value: (monthTotal >= 0 ? '+$' : '-$') + Math.abs(Math.round(monthTotal)).toLocaleString(), color: monthTotal >= 0 ? '#00ff88' : '#ff3366' },
+                  { label: 'WIN RATE', value: winRate + '%', color: Number(winRate) >= 60 ? '#00ff88' : '#f59e0b' },
+                  { label: 'WINNING DAYS', value: wins.toString(), color: '#00ff88' },
+                  { label: 'LOSING DAYS', value: losses.toString(), color: '#ff3366' },
+                  { label: 'CURRENT STREAK', value: streak + ' 🔥', color: streak >= 5 ? '#00ff88' : '#f59e0b' },
+                  { label: 'DAYS LOGGED', value: monthLogs.length.toString(), color: '#00d4ff' },
+                ].map((m, i) => (
+                  <div key={i} style={{ ...S.card, padding: '14px' }}>
+                    <div style={{ ...S.lbl, marginBottom: '4px' }}>{m.label}</div>
+                    <div style={{ fontSize: '22px', fontWeight: 700, color: m.color, fontFamily: 'monospace' }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Calendar Navigation */}
+              <div style={{ ...S.card }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <button style={S.btn('secondary')} onClick={() => { const d = new Date(calendarYear, calendarMonth - 1, 1); setCalendarMonth(d.getMonth()); setCalendarYear(d.getFullYear()) }}>◀ חודש קודם</button>
+                  <div style={{ fontWeight: 700, fontSize: '16px', color: '#00d4ff' }}>{monthName}</div>
+                  <button style={S.btn('secondary')} onClick={() => { const d = new Date(calendarYear, calendarMonth + 1, 1); setCalendarMonth(d.getMonth()); setCalendarYear(d.getFullYear()) }}>חודש הבא ▶</button>
+                </div>
+
+                {/* Day Headers */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px', marginBottom: '6px' }}>
+                  {['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'].map(d => (
+                    <div key={d} style={{ textAlign: 'center', fontSize: '9px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px', padding: '4px 0' }}>{d}</div>
+                  ))}
+                </div>
+
+                {/* Calendar Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px' }}>
+                  {Array.from({ length: firstDay }, (_, i) => (
+                    <div key={'e' + i} />
+                  ))}
+                  {calDays.map(d => {
+                    const pnl = dayPnl(d)
+                    const dateKey = `${calendarYear}-${String(calendarMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+                    const isToday = dateKey === TODAY
+                    const isSelected = dateKey === selectedDay
+                    const color = pnl === null ? '#1e293b' : pnl > 0 ? 'rgba(0,255,136,0.25)' : pnl < 0 ? 'rgba(255,51,102,0.2)' : 'rgba(245,158,11,0.15)'
+                    const borderColor = isSelected ? '#00d4ff' : isToday ? '#f59e0b' : pnl === null ? 'rgba(255,255,255,0.03)' : pnl > 0 ? 'rgba(0,255,136,0.35)' : pnl < 0 ? 'rgba(255,51,102,0.3)' : 'rgba(245,158,11,0.3)'
+                    return (
+                      <div key={d}
+                        onClick={() => setSelectedDay(selectedDay === dateKey ? null : dateKey)}
+                        style={{ minHeight: '56px', borderRadius: '6px', background: color, border: `1px solid ${borderColor}`, cursor: 'pointer', padding: '6px 5px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', boxShadow: isSelected ? '0 0 0 2px #00d4ff' : undefined, transition: 'all 0.15s' }}>
+                        <div style={{ fontSize: '11px', color: isToday ? '#f59e0b' : '#94a3b8', fontWeight: isToday ? 700 : 400 }}>{d}</div>
+                        {pnl !== null && (
+                          <div style={{ fontSize: '9px', fontWeight: 700, color: pnl > 0 ? '#00ff88' : pnl < 0 ? '#ff3366' : '#f59e0b', textAlign: 'center', lineHeight: 1.1 }}>
+                            {pnl > 0 ? '+' : ''}{Math.round(pnl) >= 1000 ? (pnl > 0 ? '+' : '') + (pnl/1000).toFixed(1) + 'K' : Math.round(pnl)}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Legend */}
+                <div style={{ display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap' }}>
+                  {[['🟢', 'רווחי', '#00ff88'], ['🔴', 'הפסדי', '#ff3366'], ['🟡', 'ניטרלי', '#f59e0b'], ['⬜', 'לא נסחר', '#64748b']].map(([icon, label, color]) => (
+                    <div key={label as string} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10px', color: color as string }}>{icon} {label}</div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Selected Day Detail */}
+              {selectedDay && (
+                <div style={S.card}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                    <div style={S.lbl}>📅 פירוט — {selectedDay}</div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button style={S.btn('primary')} onClick={() => { setLogNew(true); setSelectedDay(null) }}>+ הוסף רישום</button>
+                      <button style={{ ...S.btn('secondary'), padding: '4px 10px', fontSize: '11px' }} onClick={() => setSelectedDay(null)}>✕</button>
+                    </div>
+                  </div>
+                  {selectedLogs.length === 0 ? (
+                    <div style={{ color: '#64748b', fontSize: '12px', padding: '12px 0' }}>לא נרשם P&L ביום זה</div>
+                  ) : (
+                    <table style={S.table}>
+                      <thead><tr>
+                        {['חשבון', 'P&L', 'הערות', 'פעולות'].map(h => <th key={h} style={S.th}>{h}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {selectedLogs.map(log => {
+                          const acc = accounts.find(a => a.id === log.funded_account_id)
+                          return (
+                            <tr key={log.id}>
+                              <td style={S.td}>{acc?.prop_firms?.name ?? 'Account'}</td>
+                              <td style={{ ...S.td, color: log.pnl >= 0 ? '#00ff88' : '#ff3366', fontWeight: 700 }}>{log.pnl >= 0 ? '+$' : '-$'}{Math.abs(log.pnl).toFixed(2)}</td>
+                              <td style={{ ...S.td, fontSize: '11px', color: '#64748b' }}>{log.notes || '—'}</td>
+                              <td style={S.td}>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                  <button style={{ ...S.btn('secondary'), padding: '3px 8px', fontSize: '10px' }} onClick={() => { setLogModal(log); setLogNew(false) }}>✏️</button>
+                                  <button style={{ ...S.btn('danger'), padding: '3px 8px', fontSize: '10px' }} onClick={() => deleteLog(log.id)}>🗑️</button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+
+              {/* Recent 20 entries */}
+              <div style={S.card}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <div style={S.lbl}>📋 יומן מסחר — 20 רשומות אחרונות</div>
+                  <button style={S.btn('primary')} onClick={() => setLogNew(true)}>+ רשום P&L</button>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={S.table}>
+                    <thead><tr>
+                      {['תאריך', 'חשבון', 'P&L', 'ריצה מצטברת', 'הערות', 'פעולות'].map(h => <th key={h} style={S.th}>{h}</th>)}
+                    </tr></thead>
+                    <tbody>
+                      {[...dailyLogs].reverse().slice(0, 20).map((log, i) => {
+                        const acc = accounts.find(a => a.id === log.funded_account_id)
+                        const idx = dailyLogs.indexOf(log)
+                        const running = dailyLogs.slice(0, idx + 1).reduce((s, l) => s + l.pnl, 0)
+                        return (
+                          <tr key={log.id} onClick={() => setSelectedDay(log.log_date)} style={{ cursor: 'pointer' }}>
+                            <td style={{ ...S.td, color: '#00d4ff' }}>{log.log_date}</td>
+                            <td style={S.td}>{acc?.prop_firms?.name ?? '—'}</td>
+                            <td style={{ ...S.td, color: log.pnl >= 0 ? '#00ff88' : '#ff3366', fontWeight: 700 }}>{log.pnl >= 0 ? '+$' : '-$'}{Math.abs(log.pnl).toFixed(2)}</td>
+                            <td style={{ ...S.td, color: '#a78bfa', fontFamily: 'monospace' }}>${Math.round(running).toLocaleString()}</td>
+                            <td style={{ ...S.td, fontSize: '11px', color: '#64748b' }}>{log.notes || '—'}</td>
+                            <td style={S.td}>
+                              <div style={{ display: 'flex', gap: '5px' }}>
+                                <button style={{ ...S.btn('secondary'), padding: '3px 8px', fontSize: '10px' }} onClick={e => { e.stopPropagation(); setLogModal(log); setLogNew(false) }}>✏️</button>
+                                <button style={{ ...S.btn('danger'), padding: '3px 8px', fontSize: '10px' }} onClick={e => { e.stopPropagation(); deleteLog(log.id) }}>🗑️</button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* ══════════════════════════════════════════════════════
             TAB 0 — DASHBOARD
         ══════════════════════════════════════════════════════ */}
-        {tab === 0 && (
+        {tab === 2 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* KPI Row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
@@ -1456,7 +1842,7 @@ export default function App() {
         {/* ══════════════════════════════════════════════════════
             TAB 1 — FUNDED ACCOUNTS
         ══════════════════════════════════════════════════════ */}
-        {tab === 1 && (
+        {tab === 3 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <div>
@@ -1609,7 +1995,7 @@ export default function App() {
         {/* ══════════════════════════════════════════════════════
             TAB 2 — CHALLENGES
         ══════════════════════════════════════════════════════ */}
-        {tab === 2 && (
+        {tab === 4 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -1697,7 +2083,7 @@ export default function App() {
         {/* ══════════════════════════════════════════════════════
             TAB 3 — GROWTH PROJECTOR
         ══════════════════════════════════════════════════════ */}
-        {tab === 3 && (
+        {tab === 5 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div>
               <div style={{ color: '#00d4ff', fontWeight: 700, fontSize: '16px' }}>GROWTH PROJECTOR</div>
@@ -1820,7 +2206,7 @@ export default function App() {
         {/* ══════════════════════════════════════════════════════
             TAB 4 — PROP FIRMS DB
         ══════════════════════════════════════════════════════ */}
-        {tab === 4 && (
+        {tab === 6 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -1930,7 +2316,7 @@ export default function App() {
         {/* ══════════════════════════════════════════════════════
             TAB 5 — REINVESTMENT PLAN
         ══════════════════════════════════════════════════════ */}
-        {tab === 5 && (
+        {tab === 7 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
