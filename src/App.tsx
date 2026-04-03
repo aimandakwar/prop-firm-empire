@@ -39,6 +39,8 @@ interface FundedAccount {
   current_month_profit: number
   total_payouts_received?: number
   notes?: string
+  ctrader_account_id?: number
+  ctrader_login?: number
   prop_firms?: PropFirm
 }
 
@@ -77,6 +79,19 @@ interface TradingSettings {
   reinvestment_rate: number
   avg_challenge_cost?: number
   pass_rate: number
+  ctrader_client_id?: string
+  ctrader_client_secret?: string
+}
+
+interface CtraderAccount {
+  accountId?: number
+  traderLogin?: number
+  balance?: number
+  currency?: string
+  brokerName?: string
+  description?: string
+  live?: boolean
+  [key: string]: any
 }
 
 interface LiveAccountData {
@@ -486,6 +501,113 @@ const LogModal = ({ accounts, log, onClose, onSave, loading }: LogModalProps) =>
 }
 
 // ─────────────────────────────────────────────────────────────
+// cTRADER MODALS
+// ─────────────────────────────────────────────────────────────
+
+// Settings modal — user enters Client ID & Secret once
+const CtraderSettingsModal = ({
+  settings, onClose, onSave, loading,
+}: { settings: TradingSettings; onClose: () => void; onSave: (id: string, secret: string) => void; loading: boolean }) => {
+  const [clientId, setClientId] = useState(settings.ctrader_client_id ?? '')
+  const [clientSecret, setClientSecret] = useState(settings.ctrader_client_secret ?? '')
+  const OAUTH_URL = 'https://connect.ctrader.com/'
+  return (
+    <Modal title="cTRADER APP CREDENTIALS" onClose={onClose}>
+      <div style={{ padding: '12px 16px', background: 'rgba(0,212,255,0.05)', border: '1px solid rgba(0,212,255,0.2)', borderRadius: '6px', fontSize: '12px', color: '#64748b', lineHeight: 1.8 }}>
+        <div style={{ color: '#00d4ff', fontWeight: 700, marginBottom: '8px' }}>One-time setup (3 minutes)</div>
+        <div>1. Go to <a href={OAUTH_URL} target="_blank" rel="noopener noreferrer" style={{ color: '#06b6d4' }}>connect.ctrader.com</a> → Create App</div>
+        <div>2. Set <b>Redirect URI</b> to exactly:</div>
+        <div style={{ background: 'rgba(0,0,0,0.4)', padding: '6px 10px', borderRadius: '4px', color: '#00d4ff', fontFamily: 'monospace', fontSize: '11px', margin: '6px 0', wordBreak: 'break-all' }}>
+          https://yuadrxbvyhbbtbmodsve.supabase.co/functions/v1/ctrader-oauth
+        </div>
+        <div>3. Copy the <b>Client ID</b> and <b>Client Secret</b> below</div>
+      </div>
+      <div style={S.frow}>
+        <span style={S.flabel}>Client ID</span>
+        <input style={S.input} type="text" value={clientId} onChange={e => setClientId(e.target.value)} placeholder="e.g. 12345_AbCdEfGhIj..." />
+      </div>
+      <div style={S.frow}>
+        <span style={S.flabel}>Client Secret</span>
+        <input style={S.input} type="password" value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder="Your app secret" />
+      </div>
+      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+        <button style={S.btn('secondary')} onClick={onClose}>Cancel</button>
+        <button style={S.btn('primary')} disabled={loading || !clientId || !clientSecret}
+          onClick={() => onSave(clientId.trim(), clientSecret.trim())}>
+          {loading ? 'Saving...' : 'Save & Connect'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+// Account selection modal — after OAuth, pick which cTrader account to link
+const CtraderAccountSelectModal = ({
+  ctraderAccounts, fundedAccounts, onClose, onLink,
+}: { ctraderAccounts: CtraderAccount[]; fundedAccounts: FundedAccount[]; onClose: () => void; onLink: (cta: CtraderAccount, fAccId: string) => void }) => {
+  const [selectedFAccId, setSelectedFAccId] = useState(fundedAccounts[0]?.id ?? '')
+  const [selectedCta, setSelectedCta] = useState<CtraderAccount | null>(ctraderAccounts[0] ?? null)
+  return (
+    <Modal title="🔗 LINK cTRADER ACCOUNT" onClose={onClose}>
+      <div style={{ padding: '10px 14px', background: 'rgba(0,255,136,0.05)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '6px', fontSize: '12px', color: '#00ff88', marginBottom: '4px' }}>
+        ✅ Connected! Select which cTrader account to link to your funded account.
+      </div>
+
+      <div style={S.frow}>
+        <span style={S.flabel}>cTrader Account</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {ctraderAccounts.length === 0 && (
+            <div style={{ color: '#64748b', fontSize: '12px' }}>No accounts found — try reconnecting.</div>
+          )}
+          {ctraderAccounts.map((cta, i) => {
+            const id = cta.accountId ?? cta.traderLogin ?? i
+            const isSelected = selectedCta === cta
+            return (
+              <div key={id} onClick={() => setSelectedCta(cta)}
+                style={{
+                  padding: '12px 16px', borderRadius: '6px', cursor: 'pointer',
+                  border: isSelected ? '1px solid rgba(0,212,255,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                  background: isSelected ? 'rgba(0,212,255,0.08)' : 'rgba(255,255,255,0.02)',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                <div>
+                  <div style={{ color: isSelected ? '#00d4ff' : '#e2e8f0', fontWeight: 700, fontSize: '13px' }}>
+                    {cta.brokerName ?? 'Broker'} — Login #{cta.traderLogin ?? cta.accountId ?? id}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px' }}>
+                    Balance: <span style={{ color: '#00ff88' }}>{cta.currency ?? '$'} {(cta.balance ?? 0).toLocaleString()}</span>
+                    {' · '}{cta.live ? <span style={{ color: '#00ff88' }}>Live</span> : <span style={{ color: '#64748b' }}>Demo</span>}
+                    {cta.description ? ` · ${cta.description}` : ''}
+                  </div>
+                </div>
+                {isSelected && <span style={{ color: '#00d4ff', fontSize: '18px' }}>✓</span>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div style={S.frow}>
+        <span style={S.flabel}>Link To Funded Account</span>
+        <select style={S.select} value={selectedFAccId} onChange={e => setSelectedFAccId(e.target.value)}>
+          {fundedAccounts.map(a => (
+            <option key={a.id} value={a.id}>{a.prop_firms?.name ?? 'Account'} — ${a.account_size.toLocaleString()}</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+        <button style={S.btn('secondary')} onClick={onClose}>Skip for now</button>
+        <button style={S.btn('success')} disabled={!selectedCta || !selectedFAccId}
+          onClick={() => selectedCta && onLink(selectedCta, selectedFAccId)}>
+          🔗 Link Account
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
 // MAIN APP
 // ─────────────────────────────────────────────────────────────
 
@@ -509,6 +631,13 @@ export default function App() {
   const [accountNew, setAccountNew] = useState(false)
   const [challengeNew, setChallengeNew] = useState(false)
   const [logNew, setLogNew] = useState(false)
+
+  // cTrader connect flow
+  const [ctraderSettingsOpen, setCtraderSettingsOpen] = useState(false)
+  const [ctraderConnecting, setCtraderConnecting] = useState(false)
+  const [ctraderAccounts, setCtraderAccounts] = useState<CtraderAccount[]>([])
+  const [ctraderSelectOpen, setCtraderSelectOpen] = useState(false)
+  const [ctraderPollRef, setCtraderPollRef] = useState<ReturnType<typeof setInterval> | null>(null)
 
   // Projector sliders
   const [monthlyReturn, setMonthlyReturn] = useState(10)
@@ -638,6 +767,94 @@ export default function App() {
     if (!confirm('Delete this log entry?')) return
     const { error } = await supabase.from('daily_logs').delete().eq('id', id)
     if (!error) { setDailyLogs(p => p.filter(l => l.id !== id)); showOk('Log deleted') }
+  }
+
+  // ── cTrader OAuth flow ────────────────────────────────────
+
+  const OAUTH_BASE = 'https://connect.spotware.com/apps/authorize'
+  const REDIRECT_URI = 'https://yuadrxbvyhbbtbmodsve.supabase.co/functions/v1/ctrader-oauth'
+
+  // Save credentials and then immediately launch the OAuth popup
+  const saveCtraderCredentials = async (clientId: string, clientSecret: string) => {
+    setLoading(true)
+    try {
+      const { error } = await supabase.from('trading_settings').update({
+        ctrader_client_id: clientId,
+        ctrader_client_secret: clientSecret,
+      }).eq('id', settings.id ?? '')
+      if (error) throw error
+      setSettings(p => ({ ...p, ctrader_client_id: clientId, ctrader_client_secret: clientSecret }))
+      setCtraderSettingsOpen(false)
+      setTimeout(() => launchOauthPopup(clientId), 300)
+    } catch (e: any) {
+      showErr('Save error: ' + (e.message ?? 'Unknown'))
+    }
+    setLoading(false)
+  }
+
+  const launchOauthPopup = (clientId: string) => {
+    const url = `${OAUTH_BASE}?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=trading`
+    const popup = window.open(url, 'ctrader-auth', 'width=520,height=620,left=200,top=100')
+    if (!popup) { showErr('Popup blocked — allow popups for this site'); return }
+    setCtraderConnecting(true)
+
+    // Poll DB every 2.5 sec until new connection appears
+    const started = Date.now()
+    const interval = setInterval(async () => {
+      // Timeout after 3 minutes
+      if (Date.now() - started > 180000) {
+        clearInterval(interval)
+        setCtraderConnecting(false)
+        showErr('Connection timeout — try again')
+        return
+      }
+      // Check for a new record (created in the last 5 minutes)
+      const since = new Date(started - 5000).toISOString()
+      const { data } = await supabase
+        .from('ctrader_connections')
+        .select('*')
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (data?.ctrader_accounts) {
+        clearInterval(interval)
+        setCtraderConnecting(false)
+        popup.close()
+        const parsed: CtraderAccount[] = Array.isArray(data.ctrader_accounts)
+          ? data.ctrader_accounts
+          : []
+        setCtraderAccounts(parsed)
+        setCtraderSelectOpen(true)
+        showOk(`✅ cTrader connected! Found ${parsed.length} account${parsed.length !== 1 ? 's' : ''}`)
+      }
+    }, 2500)
+    setCtraderPollRef(interval as any)
+  }
+
+  const connectCtrader = () => {
+    if (!settings.ctrader_client_id || !settings.ctrader_client_secret) {
+      setCtraderSettingsOpen(true)
+    } else {
+      launchOauthPopup(settings.ctrader_client_id)
+    }
+  }
+
+  const linkCtraderAccount = async (cta: CtraderAccount, fundedAccountId: string) => {
+    const { error } = await supabase.from('funded_accounts').update({
+      ctrader_account_id: cta.accountId ?? cta.traderLogin ?? null,
+      ctrader_login: cta.traderLogin ?? null,
+    }).eq('id', fundedAccountId)
+    if (!error) {
+      setAccounts(p => p.map(a => a.id === fundedAccountId
+        ? { ...a, ctrader_account_id: cta.accountId ?? cta.traderLogin, ctrader_login: cta.traderLogin }
+        : a))
+      setCtraderSelectOpen(false)
+      showOk('🔗 Account linked! Live data will appear in 30 seconds.')
+    } else {
+      showErr('Link failed: ' + error.message)
+    }
   }
 
   // ── Derived Metrics ───────────────────────────────────────
@@ -777,6 +994,31 @@ export default function App() {
           onSave={saveLog}
           loading={loading}
         />
+      )}
+      {ctraderSettingsOpen && (
+        <CtraderSettingsModal
+          settings={settings}
+          onClose={() => setCtraderSettingsOpen(false)}
+          onSave={saveCtraderCredentials}
+          loading={loading}
+        />
+      )}
+      {ctraderSelectOpen && (
+        <CtraderAccountSelectModal
+          ctraderAccounts={ctraderAccounts}
+          fundedAccounts={activeAccounts}
+          onClose={() => setCtraderSelectOpen(false)}
+          onLink={linkCtraderAccount}
+        />
+      )}
+
+      {/* Connecting overlay */}
+      {ctraderConnecting && (
+        <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 998, background: 'rgba(0,0,0,0.9)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: '8px', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#00d4ff', animation: 'pulse 1s infinite' }} />
+          <div style={{ fontSize: '12px', color: '#00d4ff' }}>Waiting for cTrader authorization...</div>
+          <button style={{ ...S.btn('danger'), padding: '3px 10px', fontSize: '10px' }} onClick={() => { if (ctraderPollRef) clearInterval(ctraderPollRef); setCtraderConnecting(false) }}>Cancel</button>
+        </div>
       )}
 
       {/* HEADER */}
@@ -957,12 +1199,37 @@ export default function App() {
         ══════════════════════════════════════════════════════ */}
         {tab === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <div>
                 <div style={{ color: '#00d4ff', fontWeight: 700, fontSize: '16px' }}>FUNDED ACCOUNTS</div>
                 <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>{activeAccounts.length} active — {$$(totalCapital)} total capital</div>
               </div>
-              <button style={S.btn('primary')} onClick={() => setAccountNew(true)}>+ Add Account</button>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                {/* cTrader Connect Button */}
+                <button
+                  style={{
+                    ...S.btn('secondary'),
+                    display: 'flex', alignItems: 'center', gap: '7px',
+                    padding: '8px 16px', fontSize: '12px',
+                    border: isLive ? '1px solid rgba(0,255,136,0.4)' : '1px solid rgba(0,212,255,0.3)',
+                    color: isLive ? '#00ff88' : '#00d4ff',
+                    background: isLive ? 'rgba(0,255,136,0.07)' : 'rgba(0,212,255,0.07)',
+                  }}
+                  onClick={connectCtrader}
+                  disabled={ctraderConnecting}
+                  title={settings.ctrader_client_id ? 'Re-connect cTrader' : 'Connect cTrader account'}
+                >
+                  <span style={{ fontSize: '16px' }}>🔌</span>
+                  {ctraderConnecting ? 'Connecting...' : isLive ? '● cTrader Live' : 'Connect cTrader'}
+                </button>
+                {settings.ctrader_client_id && (
+                  <button style={{ ...S.btn('secondary'), padding: '8px 10px', fontSize: '11px' }}
+                    onClick={() => setCtraderSettingsOpen(true)} title="Edit cTrader credentials">
+                    ⚙️
+                  </button>
+                )}
+                <button style={S.btn('primary')} onClick={() => setAccountNew(true)}>+ Add Account</button>
+              </div>
             </div>
 
             {/* Summary stats */}
@@ -1031,16 +1298,33 @@ export default function App() {
                     <div style={S.bar}><div style={S.fill(pctMonthly, pctMonthly >= 100 ? '#00ff88' : '#f59e0b')} /></div>
                   </div>
 
-                  {/* Webhook URL */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(0,0,0,0.3)', borderRadius: '5px', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '9px', color: '#64748b', letterSpacing: '1px' }}>WEBHOOK</span>
-                    <span style={{ fontSize: '10px', color: '#06b6d4', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      https://yuadrxbvyhbbtbmodsve.supabase.co/functions/v1/ctrader-webhook?account={acc.id}
-                    </span>
-                    <button style={{ ...S.btn('secondary'), padding: '3px 8px', fontSize: '10px' }}
-                      onClick={() => navigator.clipboard?.writeText(`https://yuadrxbvyhbbtbmodsve.supabase.co/functions/v1/ctrader-webhook?account=${acc.id}`).then(() => showOk('URL copied'))}>
-                      📋 Copy
-                    </button>
+                  {/* cTrader Link Status + Webhook */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
+                    {acc.ctrader_login ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', background: 'rgba(0,255,136,0.05)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '5px' }}>
+                        <span style={{ fontSize: '9px', color: '#00ff88', letterSpacing: '1px', fontWeight: 700 }}>🔗 cTRADER LINKED</span>
+                        <span style={{ fontSize: '11px', color: '#00ff88' }}>Login #{acc.ctrader_login}</span>
+                        <button style={{ ...S.btn('secondary'), padding: '2px 8px', fontSize: '10px', marginLeft: 'auto' }}
+                          onClick={connectCtrader}>Re-link</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '5px' }}>
+                        <span style={{ fontSize: '9px', color: '#f59e0b', letterSpacing: '1px' }}>⚠ NOT LINKED</span>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>No cTrader account linked</span>
+                        <button style={{ ...S.btn('primary'), padding: '3px 10px', fontSize: '10px', marginLeft: 'auto' }}
+                          onClick={connectCtrader}>🔌 Connect cTrader</button>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'rgba(0,0,0,0.3)', borderRadius: '5px' }}>
+                      <span style={{ fontSize: '9px', color: '#64748b', letterSpacing: '1px' }}>WEBHOOK</span>
+                      <span style={{ fontSize: '10px', color: '#06b6d4', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {`https://yuadrxbvyhbbtbmodsve.supabase.co/functions/v1/ctrader-webhook?account=${acc.id}`}
+                      </span>
+                      <button style={{ ...S.btn('secondary'), padding: '3px 8px', fontSize: '10px' }}
+                        onClick={() => navigator.clipboard?.writeText(`https://yuadrxbvyhbbtbmodsve.supabase.co/functions/v1/ctrader-webhook?account=${acc.id}`).then(() => showOk('URL copied'))}>
+                        📋 Copy
+                      </button>
+                    </div>
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px' }}>
