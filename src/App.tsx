@@ -607,6 +607,181 @@ const CtraderAccountSelectModal = ({
   )
 }
 
+// PropFirm Modal
+interface PropFirmModalProps {
+  firm: PropFirm | null
+  onClose: () => void
+  onSave: (data: Partial<PropFirm>, id?: string) => void
+  loading: boolean
+}
+const PropFirmModal = ({ firm, onClose, onSave, loading }: PropFirmModalProps) => {
+  const [f, setF] = useState({
+    name: firm?.name ?? '',
+    challenge_cost_100k: firm?.challenge_cost_100k ?? 350,
+    payout_split: firm?.payout_split ?? 80,
+    phase1_target: firm?.phase1_target ?? 8000,
+    phase2_target: firm?.phase2_target ?? 4000,
+    daily_loss_limit: firm?.daily_loss_limit ?? 5,
+    max_drawdown: firm?.max_drawdown ?? 10,
+    max_funded_accounts: firm?.max_funded_accounts ?? 10,
+    website_url: firm?.website_url ?? '',
+    is_israel_friendly: firm?.is_israel_friendly ?? false,
+    notes: firm?.notes ?? '',
+  })
+  const u = (k: string, v: any) => setF(p => ({ ...p, [k]: v }))
+  return (
+    <Modal title={firm ? 'EDIT PROP FIRM' : 'ADD PROP FIRM'} onClose={onClose}>
+      <div style={S.frow}>
+        <span style={S.flabel}>Firm Name</span>
+        <input style={S.input} type="text" value={f.name} onChange={e => u('name', e.target.value)} placeholder="e.g. FTMO" />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div style={S.frow}>
+          <span style={S.flabel}>$100K Challenge Cost ($)</span>
+          <input style={S.input} type="number" value={f.challenge_cost_100k} onChange={e => u('challenge_cost_100k', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Payout Split (%)</span>
+          <input style={S.input} type="number" min={0} max={100} value={f.payout_split} onChange={e => u('payout_split', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Phase 1 Target ($)</span>
+          <input style={S.input} type="number" value={f.phase1_target} onChange={e => u('phase1_target', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Phase 2 Target ($)</span>
+          <input style={S.input} type="number" value={f.phase2_target} onChange={e => u('phase2_target', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Max Drawdown (%)</span>
+          <input style={S.input} type="number" min={0} max={50} value={f.max_drawdown} onChange={e => u('max_drawdown', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Daily Loss Limit (%)</span>
+          <input style={S.input} type="number" min={0} max={20} value={f.daily_loss_limit} onChange={e => u('daily_loss_limit', Number(e.target.value))} />
+        </div>
+      </div>
+      <div style={S.frow}>
+        <span style={S.flabel}>Website URL</span>
+        <input style={S.input} type="text" value={f.website_url} onChange={e => u('website_url', e.target.value)} placeholder="https://..." />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <input type="checkbox" id="il_firm" checked={f.is_israel_friendly} onChange={e => u('is_israel_friendly', e.target.checked)} style={{ accentColor: '#00ff88', width: '16px', height: '16px', cursor: 'pointer' }} />
+        <label htmlFor="il_firm" style={{ fontSize: '12px', color: '#e2e8f0', cursor: 'pointer' }}>Israel Friendly (accepts Israeli traders)</label>
+      </div>
+      <div style={S.frow}>
+        <span style={S.flabel}>Notes</span>
+        <input style={S.input} type="text" value={f.notes} onChange={e => u('notes', e.target.value)} placeholder="Optional" />
+      </div>
+      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+        <button style={S.btn('secondary')} onClick={onClose}>Cancel</button>
+        <button style={S.btn('primary')} disabled={loading || !f.name.trim()} onClick={() => onSave(f, firm?.id)}>
+          {loading ? 'Saving...' : firm ? 'Update Firm' : 'Add Firm'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+// Settings Modal
+interface SettingsModalProps {
+  settings: TradingSettings
+  onClose: () => void
+  onSave: (data: Partial<TradingSettings>) => void
+  loading: boolean
+}
+const SettingsModal = ({ settings, onClose, onSave, loading }: SettingsModalProps) => {
+  const [f, setF] = useState({
+    daily_target: settings.daily_target,
+    monthly_target: settings.monthly_target,
+    total_capital_goal: settings.total_capital_goal,
+    payout_split: settings.payout_split,
+    reinvestment_rate: settings.reinvestment_rate,
+    pass_rate: settings.pass_rate,
+    avg_challenge_cost: settings.avg_challenge_cost ?? 350,
+  })
+  const u = (k: string, v: any) => setF(p => ({ ...p, [k]: v }))
+  return (
+    <Modal title="⚙️ TRADING SETTINGS" onClose={onClose}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div style={S.frow}>
+          <span style={S.flabel}>Daily P&L Target ($)</span>
+          <input style={S.input} type="number" value={f.daily_target} onChange={e => u('daily_target', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Monthly P&L Target ($)</span>
+          <input style={S.input} type="number" value={f.monthly_target} onChange={e => u('monthly_target', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Capital Goal ($)</span>
+          <input style={S.input} type="number" value={f.total_capital_goal} onChange={e => u('total_capital_goal', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Payout Split (%)</span>
+          <input style={S.input} type="number" min={0} max={100} value={f.payout_split} onChange={e => u('payout_split', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Reinvestment Rate (%)</span>
+          <input style={S.input} type="number" min={0} max={100} value={f.reinvestment_rate} onChange={e => u('reinvestment_rate', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Challenge Pass Rate (%)</span>
+          <input style={S.input} type="number" min={0} max={100} value={f.pass_rate} onChange={e => u('pass_rate', Number(e.target.value))} />
+        </div>
+        <div style={S.frow}>
+          <span style={S.flabel}>Avg Challenge Cost ($)</span>
+          <input style={S.input} type="number" value={f.avg_challenge_cost} onChange={e => u('avg_challenge_cost', Number(e.target.value))} />
+        </div>
+      </div>
+      <div style={{ padding: '10px 14px', background: 'rgba(0,212,255,0.04)', border: '1px solid rgba(0,212,255,0.1)', borderRadius: '6px', fontSize: '11px', color: '#64748b', lineHeight: 1.8 }}>
+        💡 Keep Rate: <span style={{ color: '#f59e0b', fontWeight: 700 }}>{100 - f.reinvestment_rate}%</span> of payouts go to personal income<br />
+        📈 Projected monthly income on $1M capital: <span style={{ color: '#00ff88', fontWeight: 700 }}>${Math.round(1000000 * 0.10 * (f.payout_split / 100) * ((100 - f.reinvestment_rate) / 100)).toLocaleString()}</span>
+      </div>
+      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+        <button style={S.btn('secondary')} onClick={onClose}>Cancel</button>
+        <button style={S.btn('primary')} disabled={loading} onClick={() => onSave(f)}>
+          {loading ? 'Saving...' : 'Save Settings'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+// Payout Modal
+interface PayoutModalProps {
+  account: FundedAccount
+  onClose: () => void
+  onSave: (accountId: string, amount: number, notes: string) => void
+  loading: boolean
+}
+const PayoutModal = ({ account, onClose, onSave, loading }: PayoutModalProps) => {
+  const [amount, setAmount] = useState(0)
+  const [notes, setNotes] = useState('')
+  return (
+    <Modal title="💸 RECORD PAYOUT" onClose={onClose}>
+      <div style={{ padding: '10px 14px', background: 'rgba(0,255,136,0.04)', border: '1px solid rgba(0,255,136,0.2)', borderRadius: '6px', marginBottom: '4px' }}>
+        <div style={{ fontSize: '12px', color: '#64748b' }}>Account</div>
+        <div style={{ color: '#00d4ff', fontWeight: 700 }}>{account.prop_firms?.name} — ${account.account_size.toLocaleString()}</div>
+        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>Total payouts to date: <span style={{ color: '#00ff88' }}>${(account.total_payouts_received ?? 0).toLocaleString()}</span></div>
+      </div>
+      <div style={S.frow}>
+        <span style={S.flabel}>Payout Amount ($)</span>
+        <input style={S.input} type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} placeholder="e.g. 4000" autoFocus />
+      </div>
+      <div style={S.frow}>
+        <span style={S.flabel}>Notes</span>
+        <input style={S.input} type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Month 3 payout" />
+      </div>
+      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+        <button style={S.btn('secondary')} onClick={onClose}>Cancel</button>
+        <button style={S.btn('success')} disabled={loading || amount <= 0} onClick={() => onSave(account.id, amount, notes)}>
+          {loading ? 'Saving...' : `💸 Record $${amount.toLocaleString()} Payout`}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────
 // MAIN APP
 // ─────────────────────────────────────────────────────────────
@@ -631,6 +806,12 @@ export default function App() {
   const [accountNew, setAccountNew] = useState(false)
   const [challengeNew, setChallengeNew] = useState(false)
   const [logNew, setLogNew] = useState(false)
+
+  // PropFirm + Settings modals
+  const [propFirmModal, setPropFirmModal] = useState<PropFirm | null | false>(false)
+  const [propFirmNew, setPropFirmNew] = useState(false)
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [payoutModal, setPayoutModal] = useState<FundedAccount | null>(null)
 
   // cTrader connect flow
   const [ctraderSettingsOpen, setCtraderSettingsOpen] = useState(false)
@@ -767,6 +948,60 @@ export default function App() {
     if (!confirm('Delete this log entry?')) return
     const { error } = await supabase.from('daily_logs').delete().eq('id', id)
     if (!error) { setDailyLogs(p => p.filter(l => l.id !== id)); showOk('Log deleted') }
+  }
+
+  const saveFirm = async (data: Partial<PropFirm>, id?: string) => {
+    setLoading(true)
+    try {
+      if (id) {
+        const { data: u, error } = await supabase.from('prop_firms').update(data).eq('id', id).select('*').single()
+        if (error) throw error
+        if (u) setFirms(p => p.map(f => f.id === id ? u : f).sort((a, b) => a.challenge_cost_100k - b.challenge_cost_100k))
+        showOk('Firm updated ✓')
+      } else {
+        const { data: u, error } = await supabase.from('prop_firms').insert(data).select('*').single()
+        if (error) throw error
+        if (u) setFirms(p => [...p, u].sort((a, b) => a.challenge_cost_100k - b.challenge_cost_100k))
+        showOk('Firm added ✓')
+      }
+    } catch (e: any) { showErr('Error: ' + (e.message ?? 'Unknown')) }
+    setLoading(false); setPropFirmModal(false); setPropFirmNew(false)
+  }
+
+  const deleteFirm = async (id: string) => {
+    if (!confirm('Delete this firm? Cannot be undone.')) return
+    const { error } = await supabase.from('prop_firms').delete().eq('id', id)
+    if (!error) { setFirms(p => p.filter(f => f.id !== id)); showOk('Firm deleted') }
+    else showErr('Delete failed: ' + error.message)
+  }
+
+  const saveSettings = async (data: Partial<TradingSettings>) => {
+    setLoading(true)
+    try {
+      const { error } = await supabase.from('trading_settings').update(data).eq('id', settings.id ?? '')
+      if (error) throw error
+      setSettings(p => ({ ...p, ...data }))
+      if (data.reinvestment_rate !== undefined) setProjReinvest(data.reinvestment_rate)
+      if (data.pass_rate !== undefined) setProjPassRate(data.pass_rate)
+      showOk('Settings saved ✓')
+    } catch (e: any) { showErr('Error: ' + (e.message ?? 'Unknown')) }
+    setLoading(false); setSettingsModalOpen(false)
+  }
+
+  const recordPayout = async (accountId: string, amount: number, notes: string) => {
+    setLoading(true)
+    const acc = accounts.find(a => a.id === accountId)
+    const newTotal = (acc?.total_payouts_received ?? 0) + amount
+    try {
+      const { data: u, error } = await supabase.from('funded_accounts').update({
+        total_payouts_received: newTotal,
+        notes: acc?.notes ? `${acc.notes} | Payout $${amount.toLocaleString()} (${new Date().toLocaleDateString()})${notes ? ': ' + notes : ''}` : `Payout $${amount.toLocaleString()} (${new Date().toLocaleDateString()})${notes ? ': ' + notes : ''}`,
+      }).eq('id', accountId).select('*, prop_firms(*)').single()
+      if (error) throw error
+      if (u) setAccounts(p => p.map(a => a.id === accountId ? u : a))
+      showOk(`💸 Payout of $${amount.toLocaleString()} recorded!`)
+    } catch (e: any) { showErr('Error: ' + (e.message ?? 'Unknown')) }
+    setLoading(false); setPayoutModal(null)
   }
 
   // ── cTrader OAuth flow ────────────────────────────────────
@@ -1009,6 +1244,30 @@ export default function App() {
           fundedAccounts={activeAccounts}
           onClose={() => setCtraderSelectOpen(false)}
           onLink={linkCtraderAccount}
+        />
+      )}
+      {(propFirmNew || propFirmModal !== false) && (
+        <PropFirmModal
+          firm={propFirmNew ? null : (propFirmModal as PropFirm)}
+          onClose={() => { setPropFirmModal(false); setPropFirmNew(false) }}
+          onSave={saveFirm}
+          loading={loading}
+        />
+      )}
+      {settingsModalOpen && (
+        <SettingsModal
+          settings={settings}
+          onClose={() => setSettingsModalOpen(false)}
+          onSave={saveSettings}
+          loading={loading}
+        />
+      )}
+      {payoutModal && (
+        <PayoutModal
+          account={payoutModal}
+          onClose={() => setPayoutModal(null)}
+          onSave={recordPayout}
+          loading={loading}
         />
       )}
 
@@ -1327,9 +1586,19 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <button style={S.btn('secondary')} onClick={() => { setAccountModal(acc); setAccountNew(false) }}>✏️ Edit</button>
-                    {acc.status !== 'archived' && <button style={S.btn('danger')} onClick={() => archiveAccount(acc.id)}>Archive</button>}
+                    {acc.status !== 'archived' && (
+                      <>
+                        <button style={S.btn('success')} onClick={() => setPayoutModal(acc)}>💸 Record Payout</button>
+                        <button style={S.btn('danger')} onClick={() => archiveAccount(acc.id)}>Archive</button>
+                      </>
+                    )}
+                    {(acc.total_payouts_received ?? 0) > 0 && (
+                      <span style={{ fontSize: '11px', color: '#00ff88', marginLeft: '6px' }}>
+                        Total payouts: ${(acc.total_payouts_received ?? 0).toLocaleString()}
+                      </span>
+                    )}
                   </div>
                 </div>
               )
@@ -1553,20 +1822,22 @@ export default function App() {
         ══════════════════════════════════════════════════════ */}
         {tab === 4 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div>
-              <div style={{ color: '#00d4ff', fontWeight: 700, fontSize: '16px' }}>PROP FIRMS DATABASE</div>
-              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>All firms sorted by lowest challenge cost — best value first</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ color: '#00d4ff', fontWeight: 700, fontSize: '16px' }}>PROP FIRMS DATABASE</div>
+                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>All firms sorted by lowest challenge cost — best value first</div>
+              </div>
+              <button style={S.btn('primary')} onClick={() => setPropFirmNew(true)}>+ Add Firm</button>
             </div>
 
             <div style={S.card}>
               <div style={{ overflowX: 'auto' }}>
                 <table style={S.table}>
                   <thead><tr>
-                    {['Firm', '$100K Challenge', 'Payout Split', 'Phase 1 Target', 'Phase 2 Target', 'Max Drawdown', 'Daily Limit', 'Cost/$1K', 'Est. ROI', 'Rating', 'Website'].map(h => <th key={h} style={S.th}>{h}</th>)}
+                    {['Firm', '$100K Challenge', 'Payout Split', 'Phase 1 Target', 'Phase 2 Target', 'Max DD', 'Daily Limit', 'Est. ROI', 'Rating', 'Website', 'Actions'].map(h => <th key={h} style={S.th}>{h}</th>)}
                   </tr></thead>
                   <tbody>
                     {[...firms].sort((a, b) => a.challenge_cost_100k - b.challenge_cost_100k).map(f => {
-                      const costPer1k = (f.challenge_cost_100k / 100000 * 1000).toFixed(2)
                       const estPayout = (f.phase1_target ?? 8000) * (f.payout_split / 100)
                       const roi = ((estPayout - f.challenge_cost_100k) / f.challenge_cost_100k * 100).toFixed(0)
                       return (
@@ -1581,13 +1852,18 @@ export default function App() {
                           <td style={{ ...S.td, color: '#f59e0b' }}>{f.phase2_target ? $$(f.phase2_target) : '—'}</td>
                           <td style={S.td}>{f.max_drawdown ? f.max_drawdown + '%' : '—'}</td>
                           <td style={S.td}>{f.daily_loss_limit ? f.daily_loss_limit + '%' : '—'}</td>
-                          <td style={S.td}>${costPer1k}</td>
                           <td style={{ ...S.td, color: Number(roi) > 1500 ? '#00ff88' : '#e2e8f0', fontWeight: 700 }}>{roi}%</td>
                           <td style={S.td}>{ratingStars(f.challenge_cost_100k)}</td>
                           <td style={S.td}>
                             {f.website_url ? (
                               <a href={f.website_url} target="_blank" rel="noopener noreferrer" style={{ color: '#06b6d4', fontSize: '11px', textDecoration: 'none' }}>↗ Visit</a>
                             ) : '—'}
+                          </td>
+                          <td style={S.td}>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                              <button style={{ ...S.btn('secondary'), padding: '3px 9px', fontSize: '10px' }} onClick={() => { setPropFirmModal(f); setPropFirmNew(false) }}>✏️</button>
+                              <button style={{ ...S.btn('danger'), padding: '3px 9px', fontSize: '10px' }} onClick={() => deleteFirm(f.id)}>🗑️</button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -1656,9 +1932,12 @@ export default function App() {
         ══════════════════════════════════════════════════════ */}
         {tab === 5 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div>
-              <div style={{ color: '#00d4ff', fontWeight: 700, fontSize: '16px' }}>REINVESTMENT PLAN</div>
-              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>12-month compound reinvestment schedule — based on live settings</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ color: '#00d4ff', fontWeight: 700, fontSize: '16px' }}>REINVESTMENT PLAN</div>
+                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>12-month compound reinvestment schedule — based on live settings</div>
+              </div>
+              <button style={S.btn('secondary')} onClick={() => setSettingsModalOpen(true)}>⚙️ Edit Settings</button>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
