@@ -45,14 +45,10 @@ In Lovable → Settings → Environment Variables, add:
 
 | Variable | Value |
 |---|---|
-| `VITE_SUPABASE_URL` | `https://yuadrxbvyhbbtbmodsve.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1YWRyeGJ2eWhiYnRibW9kc3ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwODY3MjMsImV4cCI6MjA4ODY2MjcyM30.J6E2hVdBftaz5wUiKzPDMZAc53XQuycAW7CKtnkIuL4` |
+| `VITE_SUPABASE_URL` | _(your Supabase project URL — see `.env.example`)_ |
+| `VITE_SUPABASE_ANON_KEY` | _(your project anon key — get from Supabase dashboard)_ |
 
-> **Note:** The keys are currently hardcoded in `src/lib/supabase.ts` for direct use. If you want to use env vars, update that file to:
-> ```ts
-> const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-> const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-> ```
+> **Note:** Configuration now uses env vars via `.env.example` → `.env`. Never commit the actual `.env` file.
 
 ---
 
